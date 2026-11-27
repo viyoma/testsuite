@@ -1280,11 +1280,11 @@ Ensure that your CNF has a [Readiness Probe](https://kubernetes.io/docs/tasks/co
 
 #### Overview
 
-Checks the CNF manifest for containers with a positive liveness probe initial delay and no startup probe. A container without a liveness probe is outside the check. The test is not applicable when no container declares a liveness probe.
+Checks the CNF manifest for containers with a liveness probe initial delay above 30 seconds and no startup probe. Positive delays of 30 seconds or less are listed in the details without failing. A container without a liveness probe is outside the check. N/A when no container declares a liveness probe.
 
 #### Rationale
 
-A startup probe gives a slow-starting container time to initialize. Kubernetes waits for it to succeed before running the liveness probe.
+A startup probe gives a slow-starting container time to initialize. Kubernetes waits for it to succeed before running the liveness probe. Short liveness delays alone do not indicate a slow start. The 30-second boundary follows the default liveness failure budget (three failures at ten-second intervals); only delays above it require a startup probe in this check.
 
 Sources: [Kubernetes probes](https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/).
 

@@ -49,6 +49,32 @@ describe "startup_probe", tags: ["startup_probe"] do
     output.should contain("livenessProbe.initialDelaySeconds is 60")
   end
 
+  [5, 10, 30].each do |delay|
+    it "reports a #{delay}-second liveness delay without failing at or below the threshold" do
+      code, verdict, output = run_startup_probe("{exec: {command: ['true']}, initialDelaySeconds: #{delay}}")
+      code.should eq(0)
+      verdict.should eq("passed")
+      output.should contain("Pod/startup-example")
+      output.should contain("container app")
+      output.should contain("livenessProbe.initialDelaySeconds is #{delay}")
+      output.should contain("within the 30-second threshold")
+    end
+  end
+
+  it "fails immediately above the 30-second threshold without a startup probe" do
+    code, verdict, output = run_startup_probe("{exec: {command: ['true']}, initialDelaySeconds: 31}")
+    code.should eq(1)
+    verdict.should eq("failed")
+    output.should contain("livenessProbe.initialDelaySeconds is 31")
+    output.should contain("above the 30-second threshold")
+  end
+
+  it "passes an explicit zero initial delay" do
+    code, verdict, _ = run_startup_probe("{exec: {command: ['true']}, initialDelaySeconds: 0}")
+    code.should eq(0)
+    verdict.should eq("passed")
+  end
+
   it "passes the same delayed liveness probe when a startup probe exists" do
     code, verdict, _ = run_startup_probe("{exec: {command: ['true']}, initialDelaySeconds: 60}", "{exec: {command: ['true']}}")
     code.should eq(0)

@@ -83,11 +83,12 @@ scored_task "readiness",
   run_probe_task(t, args, "readiness")
 end
 
-desc "Check for startup probes on containers that delay their liveness probe"
+desc "Check for startup probes on containers with a liveness delay above 30 seconds"
 scored_task "startup_probe",
   type: CNFManager::TestType::Bonus,
   emoji: "⎈🧫" do |t, args|
   CNFManager::Task.task_runner(args, task: t) do |args, config, result|
+    delay_threshold = 30
     judged = 0
     findings = 0
 
@@ -101,11 +102,17 @@ scored_task "startup_probe",
 
         judged += 1
         delay = liveness["initialDelaySeconds"]?.try(&.as_i?) || 0
-        next if delay <= 0 || container["startupProbe"]?.try(&.as_h?)
+        next if container["startupProbe"]?.try(&.as_h?)
+        if delay <= delay_threshold
+          if delay > 0
+            result.append_description("#{kind}/#{name} in #{namespace}, container #{container["name"].as_s}: livenessProbe.initialDelaySeconds is #{delay}, within the #{delay_threshold}-second threshold; no startupProbe is required")
+          end
+          next
+        end
 
         findings += 1
         result.add_impacted_resource(kind, name, namespace, container: container["name"].as_s,
-          reason: "livenessProbe.initialDelaySeconds is #{delay}, but no startupProbe is defined")
+          reason: "livenessProbe.initialDelaySeconds is #{delay}, above the #{delay_threshold}-second threshold, but no startupProbe is defined")
       end
     end
 
@@ -113,9 +120,9 @@ scored_task "startup_probe",
       result.na("No container declares a liveness probe")
     elsif findings > 0
       result.append_remediation("Add a startup probe with enough time for the container to initialize. Kubernetes will start running the liveness probe after the startup probe succeeds.")
-      result.failed("Found #{findings} container(s) with a delayed liveness probe and no startup probe")
+      result.failed("Found #{findings} container(s) with a liveness delay above #{delay_threshold} seconds and no startup probe")
     else
-      result.passed("All #{judged} container(s) with a liveness probe declare a startup probe or use no initial delay")
+      result.passed("All #{judged} container(s) with a liveness probe declare a startup probe or use an initial delay of at most #{delay_threshold} seconds")
     end
   end
 end
